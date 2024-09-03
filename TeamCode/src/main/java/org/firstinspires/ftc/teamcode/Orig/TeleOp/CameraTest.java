@@ -17,7 +17,7 @@ import java.util.List;
 public class CameraTest extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
-    private static final String TFOD_MODEL_FILE = "/internal/FIRST/tflitemodels/orig.tflite";
+    private static final String TFOD_MODEL_FILE = "/data/local/tmp/orig.tflite";
     private static final String[] LABELS = {
             "Left", "Center", "Right"
     };
@@ -60,7 +60,7 @@ public class CameraTest extends LinearOpMode {
         }
 
         // Save more CPU resources when camera is no longer needed.
-        visionPortal.close();
+        //visionPortal.close();
     }
 
     private void initTfod() {

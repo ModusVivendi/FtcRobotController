@@ -52,8 +52,8 @@ public class RRTeleOp extends LinearOpMode {
         armMotorRight = hardwareMap.dcMotor.get("SR");
 
         //init servos
-        leftBall = hardwareMap.servo.get("LB");
-        rightBall = hardwareMap.servo.get("RB");
+        //leftBall = hardwareMap.servo.get("LB");
+        //rightBall = hardwareMap.servo.get("RB");
 
         controller = new ArmEncoder(armMotorLeft, armMotorRight);
         SampleMecanumDrive drive = new SampleMecanumDrive(hardwareMap);
@@ -102,6 +102,13 @@ public class RRTeleOp extends LinearOpMode {
                 drive.setPoseEstimate(PoseStorage.currentPose);
                 telemetry.addData("Heading reseted to: ", PoseStorage.currentPose);
                 telemetry.update();
+            }
+            if(gamepad1.dpad_up)
+            {
+                controller.goTo(4700, 4700);
+            }
+            if(gamepad1.dpad_down) {
+                controller.goTo(0,0);
             }
 
         }
