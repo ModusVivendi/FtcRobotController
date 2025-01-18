@@ -17,8 +17,8 @@ public class RobotConfig {
         public static final boolean ENABLE_VERT_SLIDE_RIGHT = true;
 
         // Horizontal Slider Servos
-        public static final boolean ENABLE_HORIZ_SLIDE_LEFT = true;
-        public static final boolean ENABLE_HORIZ_SLIDE_RIGHT = true;
+        public static final boolean ENABLE_HORIZ_SLIDE_LEFT = false;
+        public static final boolean ENABLE_HORIZ_SLIDE_RIGHT = false;
 
         // Vertical Claw Servos
         public static final boolean ENABLE_VERT_CLAW_ROTATE_LEFT = true;
@@ -26,13 +26,13 @@ public class RobotConfig {
         public static final boolean ENABLE_VERT_CLAW_GRIPPER = true;
 
         // Horizontal Claw Servos
-        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_LEFT = true;
-        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_RIGHT = true;
-        public static final boolean ENABLE_HORIZ_CLAW_GRIPPER = true;
+        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_LEFT = false;
+        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_RIGHT = false;
+        public static final boolean ENABLE_HORIZ_CLAW_GRIPPER = false;
 
         // old config starts here
-        public static final boolean ENABLE_SLIDE_LEFT = true;
-        public static final boolean ENABLE_SLIDE_RIGHT = true;
+        public static final boolean ENABLE_SLIDE_LEFT = false;
+        public static final boolean ENABLE_SLIDE_RIGHT = false;
         public static final boolean ENABLE_ROTATE_LEFT = false;
         public static final boolean ENABLE_ROTATE_RIGHT = false;
 
@@ -41,10 +41,10 @@ public class RobotConfig {
         public static final boolean ENABLE_RIGHT_AXLE = false;
         public static final boolean ENABLE_LEFT_GECKO = false;
         public static final boolean ENABLE_RIGHT_GECKO = false;
-        public static final boolean ENABLE_LEFT_HORIZ_SLIDE = true;
-        public static final boolean ENABLE_RIGHT_HORIZ_SLIDE = true;
-        public static final boolean ENABLE_HORIZ_CLAW = true;
-        public static final boolean ENABLE_VERT_CLAW = true;
+        public static final boolean ENABLE_LEFT_HORIZ_SLIDE = false;
+        public static final boolean ENABLE_RIGHT_HORIZ_SLIDE = false;
+        public static final boolean ENABLE_HORIZ_CLAW = false;
+        public static final boolean ENABLE_VERT_CLAW = false;
         // Old config ends here
     }
 
