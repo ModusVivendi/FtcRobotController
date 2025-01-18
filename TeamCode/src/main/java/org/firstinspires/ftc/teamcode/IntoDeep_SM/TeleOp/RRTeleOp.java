@@ -61,8 +61,8 @@ public class RRTeleOp extends LinearOpMode {
     private static final double HORIZ_SLIDE_INCREMENT = 0.02;
 
     // Claw rotation positions
-    private static final double VERT_CLAW_PARALLEL = 0.0;
-    private static final double VERT_CLAW_ROTATED = 1.0;
+    private static final double VERT_CLAW_PARALLEL = 0.5;
+    private static final double VERT_CLAW_ROTATED = 0.8;
     private static final double HORIZ_CLAW_PARALLEL = 0.0;
     private static final double HORIZ_CLAW_ROTATED = 1.0;
 
@@ -403,13 +403,16 @@ public class RRTeleOp extends LinearOpMode {
     private void handleVerticalClaw() {
         if (vertClawRotateLeft == null || vertClawRotateRight == null || vertClawGripper == null) return;
 
+        vertClawRotateLeft.setPosition(VERT_CLAW_PARALLEL);
+        //vertClawRotateRight.setPosition(1 - VERT_CLAW_PARALLEL);
+
         // Rotation control (left bumper/trigger)
         if (gamepad2.left_bumper) {
             vertClawRotateLeft.setPosition(VERT_CLAW_PARALLEL);
-            vertClawRotateRight.setPosition(1 - VERT_CLAW_PARALLEL);
+            // vertClawRotateRight.setPosition(1 - VERT_CLAW_PARALLEL);
         } else if (gamepad2.left_trigger > 0.5) {
             vertClawRotateLeft.setPosition(VERT_CLAW_ROTATED);
-            vertClawRotateRight.setPosition(1 - VERT_CLAW_ROTATED);
+            // vertClawRotateRight.setPosition(1 - VERT_CLAW_ROTATED);
         }
 
         // Gripper control (Y button)
