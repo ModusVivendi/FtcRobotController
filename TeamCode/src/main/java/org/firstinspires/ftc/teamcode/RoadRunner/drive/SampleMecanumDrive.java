@@ -129,6 +129,8 @@ public class SampleMecanumDrive extends MecanumDrive {
 
         if (RUN_USING_ENCODER) {
             setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        } else {
+            setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         }
 
         setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -141,6 +143,8 @@ public class SampleMecanumDrive extends MecanumDrive {
 
         leftFront.setDirection(DcMotor.Direction.REVERSE);
         leftRear.setDirection(DcMotor.Direction.REVERSE);
+        rightFront.setDirection(DcMotor.Direction.FORWARD);  // Add this
+        rightRear.setDirection(DcMotor.Direction.FORWARD);   // Add this
 
         // TODO: if desired, use setLocalizer() to change the localization method
         // for instance, setLocalizer(new ThreeTrackingWheelLocalizer(...));
@@ -287,12 +291,11 @@ public class SampleMecanumDrive extends MecanumDrive {
     }
 
     @Override
-    public void setMotorPowers(double v, double v1, double v2, double v3) {
-        leftFront.setPower(v);
-        leftRear.setPower(v1);
-        rightRear.setPower(v2);
-
-        rightFront.setPower(v3);
+    public void setMotorPowers(double fl, double bl, double br, double fr) {
+        leftFront.setPower(fl);
+        leftRear.setPower(bl);
+        rightRear.setPower(br);
+        rightFront.setPower(fr);
     }
 
     @Override

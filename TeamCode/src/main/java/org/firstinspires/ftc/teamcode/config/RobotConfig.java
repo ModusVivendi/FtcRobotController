@@ -3,6 +3,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.ColorSensor;
+import org.firstinspires.ftc.teamcode.Functions.ColorSensorV3;
 
 public class RobotConfig {
     public static class HardwareConfig {
@@ -17,8 +19,8 @@ public class RobotConfig {
         public static final boolean ENABLE_VERT_SLIDE_RIGHT = true;
 
         // Horizontal Slider Servos
-        public static final boolean ENABLE_HORIZ_SLIDE_LEFT = false;
-        public static final boolean ENABLE_HORIZ_SLIDE_RIGHT = false;
+        public static final boolean ENABLE_HORIZ_SLIDE_LEFT = true;
+        public static final boolean ENABLE_HORIZ_SLIDE_RIGHT = true;
 
         // Vertical Claw Servos
         public static final boolean ENABLE_VERT_CLAW_ROTATE_LEFT = true;
@@ -26,9 +28,12 @@ public class RobotConfig {
         public static final boolean ENABLE_VERT_CLAW_GRIPPER = true;
 
         // Horizontal Claw Servos
-        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_LEFT = false;
-        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_RIGHT = false;
-        public static final boolean ENABLE_HORIZ_CLAW_GRIPPER = false;
+        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_LEFT = true;
+        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_RIGHT = true;
+        public static final boolean ENABLE_HORIZ_CLAW_GRIPPER = true;
+
+        // Digital sensors
+        public static final boolean ENABLE_HORIZ_CLAW_COLOR = true;
 
         // old config starts here
         public static final boolean ENABLE_SLIDE_LEFT = false;
@@ -72,5 +77,11 @@ public class RobotConfig {
     // Add getter for hardwareMap if needed
     public HardwareMap getHardwareMap() {
         return hardwareMap;
+    }
+
+    public ColorSensorV3 getColorSensorIfEnabled(String name, boolean isEnabled) {
+        if (!isEnabled) return null;
+        ColorSensor rawSensor = hardwareMap.get(ColorSensor.class, name);
+        return rawSensor != null ? new ColorSensorV3(rawSensor) : null;
     }
 }
