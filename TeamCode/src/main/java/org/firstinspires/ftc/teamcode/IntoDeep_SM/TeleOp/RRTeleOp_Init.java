@@ -1,15 +1,15 @@
 package org.firstinspires.ftc.teamcode.IntoDeep_SM.TeleOp;
+import org.firstinspires.ftc.teamcode.config.HardwareConfig;
 import org.firstinspires.ftc.teamcode.config.RobotConfig;
-import static org.firstinspires.ftc.teamcode.config.RobotConfig.HardwareConfig;
 
 import com.acmerobotics.roadrunner.geometry.Pose2d;
 import com.acmerobotics.roadrunner.geometry.Vector2d;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 //import com.qualcomm.robotcore.hardware.DcMotorEx.CurrentUnit;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
@@ -21,8 +21,9 @@ import org.firstinspires.ftc.teamcode.Functions.ColorSensorV3;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.SampleMecanumDrive;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.advanced.PoseStorage;
 
-@TeleOp(name="RRTeleOpIntoDeep", group = "IntoDeep_SM")
-public class RRTeleOp extends LinearOpMode {
+@TeleOp(name="RRTeleOpIntoDeep_Init", group = "IntoDeep_SM")
+@Disabled
+public class RRTeleOp_Init extends LinearOpMode {
     // Load motor config
     private RobotConfig config;
 
@@ -111,7 +112,7 @@ public class RRTeleOp extends LinearOpMode {
 
     // Speed profiles
     private static final double PRECISION_POWER_SMOOTHING = 0.3;
-    private static final double PRECISION_MAX_POWER = 0.4;
+    private static final double PRECISION_MAX_POWER = 0.8;
     private static final double FAST_POWER_SMOOTHING = 0.2;
     private static final double FAST_MAX_POWER = 0.6;
 
@@ -353,31 +354,31 @@ public class RRTeleOp extends LinearOpMode {
         config = new RobotConfig(hardwareMap);
 
         // Initialize drive motors
-        leftMotor = config.getMotorIfEnabled("FL", HardwareConfig.ENABLE_FL);
-        rightMotor = config.getMotorIfEnabled("FR", HardwareConfig.ENABLE_FR);
-        leftMotorBack = config.getMotorIfEnabled("BL", HardwareConfig.ENABLE_BL);
-        rightMotorBack = config.getMotorIfEnabled("BR", HardwareConfig.ENABLE_BR);
+        leftMotor = config.getMotorIfEnabled("FL", HardwareConfig.DrivetrainConfig.ENABLE_FL);
+        rightMotor = config.getMotorIfEnabled("FR", HardwareConfig.DrivetrainConfig.ENABLE_FR);
+        leftMotorBack = config.getMotorIfEnabled("BL", HardwareConfig.DrivetrainConfig.ENABLE_BL);
+        rightMotorBack = config.getMotorIfEnabled("BR", HardwareConfig.DrivetrainConfig.ENABLE_BR);
 
         // Initialize vertical slide motors
-        vertSlideLeft = config.getMotorExIfEnabled("VSL", HardwareConfig.ENABLE_VERT_SLIDE_LEFT);
-        vertSlideRight = config.getMotorExIfEnabled("VSR", HardwareConfig.ENABLE_VERT_SLIDE_RIGHT);
+        vertSlideLeft = config.getMotorExIfEnabled("VSL", HardwareConfig.VerticalSlideConfig.ENABLE_LEFT);
+        vertSlideRight = config.getMotorExIfEnabled("VSR", HardwareConfig.VerticalSlideConfig.ENABLE_RIGHT);
 
         // Initialize horizontal slide servos
-        horizSlideLeft = config.getServoIfEnabled("HSL", HardwareConfig.ENABLE_HORIZ_SLIDE_LEFT);
-        horizSlideRight = config.getServoIfEnabled("HSR", HardwareConfig.ENABLE_HORIZ_SLIDE_RIGHT);
+        horizSlideLeft = config.getServoIfEnabled("HSL", HardwareConfig.HorizontalSlideConfig.ENABLE_LEFT);
+        horizSlideRight = config.getServoIfEnabled("HSR", HardwareConfig.HorizontalSlideConfig.ENABLE_RIGHT);
 
         // Initialize vertical claw servos
-        vertClawRotateLeft = config.getServoIfEnabled("VCRL", HardwareConfig.ENABLE_VERT_CLAW_ROTATE_LEFT);
-        vertClawRotateRight = config.getServoIfEnabled("VCRR", HardwareConfig.ENABLE_VERT_CLAW_ROTATE_RIGHT);
-        vertClawGripper = config.getServoIfEnabled("VCG", HardwareConfig.ENABLE_VERT_CLAW_GRIPPER);
+        vertClawRotateLeft = config.getServoIfEnabled("VCRL", HardwareConfig.ClawConfig.ENABLE_VERT_ROTATE_LEFT);
+        vertClawRotateRight = config.getServoIfEnabled("VCRR", HardwareConfig.ClawConfig.ENABLE_VERT_ROTATE_RIGHT);
+        vertClawGripper = config.getServoIfEnabled("VCG", HardwareConfig.ClawConfig.ENABLE_VERT_GRIPPER);
 
         // Initialize horizontal claw servos
-        horizClawRotateLeft = config.getServoIfEnabled("HCRL", HardwareConfig.ENABLE_HORIZ_CLAW_ROTATE_LEFT);
-        horizClawRotateRight = config.getServoIfEnabled("HCRR", HardwareConfig.ENABLE_HORIZ_CLAW_ROTATE_RIGHT);
-        horizClawGripper = config.getServoIfEnabled("HCG", HardwareConfig.ENABLE_HORIZ_CLAW_GRIPPER);
+        horizClawRotateLeft = config.getServoIfEnabled("HCRL", HardwareConfig.ClawConfig.ENABLE_HORIZ_ROTATE_LEFT);
+        horizClawRotateRight = config.getServoIfEnabled("HCRR", HardwareConfig.ClawConfig.ENABLE_HORIZ_ROTATE_RIGHT);
+        horizClawGripper = config.getServoIfEnabled("HCG", HardwareConfig.ClawConfig.ENABLE_HORIZ_GRIPPER);
 
         // Color sensor
-        horizClawColor = config.getColorSensorIfEnabled("HCC", HardwareConfig.ENABLE_HORIZ_CLAW_COLOR);
+        horizClawColor = config.getColorSensorIfEnabled("HCC", HardwareConfig.SensorConfig.ENABLE_BOTTOM_COLOR);
 
         // Reset claw rotation limits
         isClawAtLeftLimit = false;
@@ -1394,16 +1395,16 @@ public class RRTeleOp extends LinearOpMode {
 //            telemetry.addData("Color Sensor", "DISABLED in hardware config");
 //        }
 
-        if (HardwareConfig.ENABLE_SLIDE_LEFT) {
+        if (HardwareConfig.HorizontalSlideConfig.ENABLE_LEFT) {
             telemetry.addData("Left Slide Position", armMotorLeft.getCurrentPosition());
         }
-        if (HardwareConfig.ENABLE_SLIDE_RIGHT) {
+        if (HardwareConfig.HorizontalSlideConfig.ENABLE_RIGHT) {
             telemetry.addData("Right Slide Position", armMotorRight.getCurrentPosition());
         }
-        if (HardwareConfig.ENABLE_ROTATE_LEFT) {
+        if (HardwareConfig.VerticalSlideConfig.ENABLE_LEFT) {
             telemetry.addData("Left Rotation Position", rotateMotorLeft.getCurrentPosition());
         }
-        if (HardwareConfig.ENABLE_ROTATE_RIGHT) {
+        if (HardwareConfig.VerticalSlideConfig.ENABLE_RIGHT) {
             telemetry.addData("Right Rotation Position", rotateMotorRight.getCurrentPosition());
         }
 //        // Only show servo positions if enabled

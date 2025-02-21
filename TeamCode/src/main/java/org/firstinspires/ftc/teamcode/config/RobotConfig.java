@@ -1,59 +1,16 @@
 package org.firstinspires.ftc.teamcode.config;
+
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.ColorSensor;
+import com.qualcomm.robotcore.hardware.DistanceSensor;
+import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.teamcode.Functions.ColorSensorV3;
 
 public class RobotConfig {
-    public static class HardwareConfig {
-        // Motors
-        public static final boolean ENABLE_FL = true;
-        public static final boolean ENABLE_FR = true;
-        public static final boolean ENABLE_BL = true;
-        public static final boolean ENABLE_BR = true;
-
-        // Vertical Slider Motors (GoBilda Yellow Jacket)
-        public static final boolean ENABLE_VERT_SLIDE_LEFT = true;
-        public static final boolean ENABLE_VERT_SLIDE_RIGHT = true;
-
-        // Horizontal Slider Servos
-        public static final boolean ENABLE_HORIZ_SLIDE_LEFT = true;
-        public static final boolean ENABLE_HORIZ_SLIDE_RIGHT = true;
-
-        // Vertical Claw Servos
-        public static final boolean ENABLE_VERT_CLAW_ROTATE_LEFT = true;
-        public static final boolean ENABLE_VERT_CLAW_ROTATE_RIGHT = true;
-        public static final boolean ENABLE_VERT_CLAW_GRIPPER = true;
-
-        // Horizontal Claw Servos
-        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_LEFT = true;
-        public static final boolean ENABLE_HORIZ_CLAW_ROTATE_RIGHT = true;
-        public static final boolean ENABLE_HORIZ_CLAW_GRIPPER = true;
-
-        // Digital sensors
-        public static final boolean ENABLE_HORIZ_CLAW_COLOR = true;
-
-        // old config starts here
-        public static final boolean ENABLE_SLIDE_LEFT = false;
-        public static final boolean ENABLE_SLIDE_RIGHT = false;
-        public static final boolean ENABLE_ROTATE_LEFT = false;
-        public static final boolean ENABLE_ROTATE_RIGHT = false;
-
-        // Servos
-        public static final boolean ENABLE_LEFT_AXLE = false;
-        public static final boolean ENABLE_RIGHT_AXLE = false;
-        public static final boolean ENABLE_LEFT_GECKO = false;
-        public static final boolean ENABLE_RIGHT_GECKO = false;
-        public static final boolean ENABLE_LEFT_HORIZ_SLIDE = false;
-        public static final boolean ENABLE_RIGHT_HORIZ_SLIDE = false;
-        public static final boolean ENABLE_HORIZ_CLAW = false;
-        public static final boolean ENABLE_VERT_CLAW = false;
-        // Old config ends here
-    }
-
-    public HardwareMap hardwareMap;
+    private final HardwareMap hardwareMap;
 
     public RobotConfig(HardwareMap hardwareMap) {
         if (hardwareMap == null) {
@@ -62,26 +19,85 @@ public class RobotConfig {
         this.hardwareMap = hardwareMap;
     }
 
+    // Generic hardware getters with error handling
     public DcMotor getMotorIfEnabled(String name, boolean isEnabled) {
-        return isEnabled ? hardwareMap.dcMotor.get(name) : null;
+        if (!isEnabled) return null;
+        try {
+            return hardwareMap.dcMotor.get(name);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize motor: " + name, e);
+        }
     }
 
     public DcMotorEx getMotorExIfEnabled(String name, boolean isEnabled) {
-        return isEnabled ? hardwareMap.get(DcMotorEx.class, name) : null;
+        if (!isEnabled) return null;
+        try {
+            return hardwareMap.get(DcMotorEx.class, name);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize motorEx: " + name, e);
+        }
     }
 
     public Servo getServoIfEnabled(String name, boolean isEnabled) {
-        return isEnabled ? hardwareMap.servo.get(name) : null;
-    }
-
-    // Add getter for hardwareMap if needed
-    public HardwareMap getHardwareMap() {
-        return hardwareMap;
+        if (!isEnabled) return null;
+        try {
+            return hardwareMap.servo.get(name);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize servo: " + name, e);
+        }
     }
 
     public ColorSensorV3 getColorSensorIfEnabled(String name, boolean isEnabled) {
         if (!isEnabled) return null;
-        ColorSensor rawSensor = hardwareMap.get(ColorSensor.class, name);
-        return rawSensor != null ? new ColorSensorV3(rawSensor) : null;
+        try {
+            ColorSensor rawSensor = hardwareMap.get(ColorSensor.class, name);
+            return rawSensor != null ? new ColorSensorV3(rawSensor) : null;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize color sensor: " + name, e);
+        }
+    }
+
+    public DistanceSensor getDistanceSensorIfEnabled(String name, boolean isEnabled) {
+        if (!isEnabled) return null;
+        try {
+            return hardwareMap.get(DistanceSensor.class, name);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize distance sensor: " + name, e);
+        }
+    }
+
+    public IMU getIMUIfEnabled(String name, boolean isEnabled) {
+        if (!isEnabled) return null;
+        try {
+            return hardwareMap.get(IMU.class, name);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize IMU: " + name, e);
+        }
+    }
+
+    // Convenience methods for specific subsystems
+    public DcMotorEx getDriveMotor(String name, boolean isEnabled, boolean reverse) {
+        DcMotorEx motor = getMotorExIfEnabled(name, isEnabled);
+        if (motor != null) {
+            motor.setDirection(reverse ? DcMotor.Direction.REVERSE : DcMotor.Direction.FORWARD);
+            motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        }
+        return motor;
+    }
+
+    public DcMotorEx getSlideMotor(String name, boolean isEnabled, boolean reverse) {
+        DcMotorEx motor = getMotorExIfEnabled(name, isEnabled);
+        if (motor != null) {
+            motor.setDirection(reverse ? DcMotor.Direction.REVERSE : DcMotor.Direction.FORWARD);
+            motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            motor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            motor.setPositionPIDFCoefficients(HardwareConfig.VerticalSlideConfig.kP);
+        }
+        return motor;
+    }
+
+    public HardwareMap getHardwareMap() {
+        return hardwareMap;
     }
 }
