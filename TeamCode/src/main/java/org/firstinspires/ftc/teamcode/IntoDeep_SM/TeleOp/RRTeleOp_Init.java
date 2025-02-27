@@ -10,6 +10,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 //import com.qualcomm.robotcore.hardware.DcMotorEx.CurrentUnit;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
@@ -60,6 +61,10 @@ public class RRTeleOp_Init extends LinearOpMode {
     private static final int VERT_SLIDE_LOW = 100;
     private static final int VERT_SLIDE_MID = 1000;
     private static final int VERT_SLIDE_HIGH = 1800;
+    // Add these constants at the top of your class
+    private static final double MAX_SLIDE_POWER = 1.0; // Increase from current value
+    private static final double POWER_SMOOTHING = 0.3; // Reduce for faster acceleration (was likely higher)
+
 
     // Horizontal slider positions
     private static final double HORIZ_SLIDE_MIN = 0.0;
@@ -83,6 +88,9 @@ public class RRTeleOp_Init extends LinearOpMode {
     // Claw gripper positions
     private static final double CLAW_OPEN = 0.2;
     private static final double CLAW_CLOSED = 0.9;
+
+    private static final double HCLAW_OPEN = 0.0;
+    private static final double HCLAW_CLOSED = 1.0;
 
     // PID Constants for vertical slides
     private static final double SLIDES_P = 0.005;
@@ -172,7 +180,7 @@ public class RRTeleOp_Init extends LinearOpMode {
 
     // Safety constants
     private static final double VERT_SLIDE_MAX_POWER = 0.5;  // Adjust this value (0.0 to 1.0)
-    private static final double POWER_SMOOTHING = 0.2;
+//    private static final double POWER_SMOOTHING = 0.2;
     private static final int SLIDES_MAX_POSITION = 4700;  // Absolute maximum extension
     private static final int SLIDES_MIN_POSITION = -10;   // Allow slight negative for zero calibration
     private static final double SLIDES_MAX_POWER = 1.0;   // Maximum allowed power
@@ -443,7 +451,7 @@ public class RRTeleOp_Init extends LinearOpMode {
 
             // Set opposite directions for parallel-mounted motors
             vertSlideLeft.setDirection(DcMotor.Direction.REVERSE);
-            vertSlideRight.setDirection(DcMotor.Direction.REVERSE);
+            vertSlideRight.setDirection(DcMotor.Direction.FORWARD);
         }
     }
     private void handleDrive(SampleMecanumDrive drive) {
@@ -595,6 +603,10 @@ public class RRTeleOp_Init extends LinearOpMode {
 
         // Add position tracking at the start
         updatePositionTracking();
+        telemetry.addData("getCurrentPosition Left: ", vertSlideLeft.getCurrentPosition());
+        telemetry.addData("getCurrentPosition Right: ", vertSlideRight.getCurrentPosition());
+        telemetry.addData("Warning", "Already at maximum height! ", vertSlideLeft.getCurrentPosition());
+
 
         // Add velocity safety check
         if (Math.abs(verticalVelocity) > VELOCITY_DANGER_THRESHOLD) {
@@ -610,7 +622,7 @@ public class RRTeleOp_Init extends LinearOpMode {
         }
 
         double slidePower = -gamepad2.left_stick_y;
-//        telemetry.addData("Vertical Slide", "Gamepad Triangle power: ", slidePower);
+        telemetry.addData("Vertical Slide", "Gamepad Triangle power: ", slidePower);
         boolean isManualControl = Math.abs(slidePower) > 0.1;
 
 //        // Add detailed telemetry for debugging
@@ -644,36 +656,84 @@ public class RRTeleOp_Init extends LinearOpMode {
 
                 break;
 
+//            case MANUAL_CONTROL:
+//                if (!isManualControl) {
+//                    vertSlideState = VertSlideState.IDLE;
+//                    stopVerticalSlides();
+//                } else {
+//                    // Smooth the power change
+//                    double smoothedPower = lastSlidePower + (slidePower - lastSlidePower) * currentPowerSmoothing;
+//                    // Apply safety limits
+//                    double safePower = getVerticalSlidePower(smoothedPower);
+//                    // Limit the maximum power
+//                    safePower = Range.clip(smoothedPower, -currentSlideMaxPower, currentSlideMaxPower);
+//                    telemetry.addData("smoothedPower: ", smoothedPower);
+//                    telemetry.addData("safePower: ", safePower);
+//                    telemetry.addData("slidedPower: ", slidePower);
+//
+//                    vertSlideLeft.setPower(safePower);
+//                    vertSlideRight.setPower(safePower);
+//
+//                    lastSlidePower = safePower;
+//
+//                    // Add power telemetry
+//                    telemetry.addData("Applied Power", "Smoothed: %.2f, Safe: %.2f", smoothedPower, safePower);
+//                }
+//                break;
+
+            // Update the MANUAL_CONTROL case in your handleVerticalSlides method
             case MANUAL_CONTROL:
                 if (!isManualControl) {
                     vertSlideState = VertSlideState.IDLE;
                     stopVerticalSlides();
                 } else {
-                    // Smooth the power change
-                    double smoothedPower = lastSlidePower + (slidePower - lastSlidePower) * currentPowerSmoothing;
+                    // Reduce smoothing for more responsive control
+                    double smoothedPower = lastSlidePower + (slidePower - lastSlidePower) * POWER_SMOOTHING;
+
                     // Apply safety limits
                     double safePower = getVerticalSlidePower(smoothedPower);
-                    // Limit the maximum power
-                    safePower = Range.clip(smoothedPower, -currentSlideMaxPower, currentSlideMaxPower);
+
+                    // Use full power range
+                    safePower = Range.clip(smoothedPower, -MAX_SLIDE_POWER, MAX_SLIDE_POWER);
 
                     vertSlideLeft.setPower(safePower);
                     vertSlideRight.setPower(safePower);
 
                     lastSlidePower = safePower;
 
-                    // Add power telemetry
-                    telemetry.addData("Applied Power", "Smoothed: %.2f, Safe: %.2f", smoothedPower, safePower);
+                    telemetry.addData("smoothedPower", smoothedPower);
+                    telemetry.addData("safePower", safePower);
+                    telemetry.addData("slidePower", slidePower);
                 }
                 break;
 
+//            case MOVING_TO_POSITION:
+//                if (isManualControl) {
+//                    vertSlideState = VertSlideState.MANUAL_CONTROL;
+//                } else {
+//                    moveVerticalSlidesToPosition(targetVertPosition);
+//                    if (isAtVerticalTarget()) {
+//                        vertSlideState = VertSlideState.IDLE;
+//                        stopVerticalSlides();
+//                    }
+//                }
+//                break;
+
+            // Update the MOVING_TO_POSITION case to use velocity-based movement
             case MOVING_TO_POSITION:
                 if (isManualControl) {
                     vertSlideState = VertSlideState.MANUAL_CONTROL;
                 } else {
-                    moveVerticalSlidesToPosition(targetVertPosition);
+                    // Use velocity-based movement instead of position-based
+                    // Adjust the max velocity value based on your specific needs (ticks/second)
+                    runToPositionWithVelocity(targetVertPosition, 1000);
+
                     if (isAtVerticalTarget()) {
                         vertSlideState = VertSlideState.IDLE;
                         stopVerticalSlides();
+                        // Reset motor mode after reaching position
+                        vertSlideLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+                        vertSlideRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
                     }
                 }
                 break;
@@ -685,8 +745,37 @@ public class RRTeleOp_Init extends LinearOpMode {
         }
 
         // Add position telemetry
+        telemetry.addData("Left Slide Position", vertSlideLeft.getCurrentPosition());
+        telemetry.addData("Right Slide Position", vertSlideRight.getCurrentPosition());
+        telemetry.addData("Left gamepad2 x", gamepad2.x);
+//        telemetry.addData("Left Trigger Value", gamepad2.left_trigger);
+
         telemetry.addData("Left Position", vertSlideLeft.getCurrentPosition());
         telemetry.addData("Right Position", vertSlideRight.getCurrentPosition());
+    }
+
+    // Run to position method for velocity-based movement (add this method)
+    private void runToPositionWithVelocity(int targetPosition, double maxVelocity) {
+        // Make sure you're using the correct motor mode
+        vertSlideLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        vertSlideRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        // Set target position
+        vertSlideLeft.setTargetPosition(targetPosition);
+        vertSlideRight.setTargetPosition(targetPosition);
+
+        // Switch to RUN_TO_POSITION mode
+        vertSlideLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        vertSlideRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        // Set velocity in ticks per second (adjust based on your motor specs)
+        // For Yellow Jacket motors with 19.2:1 gear ratio, max velocity is around 1150 ticks/second
+        vertSlideLeft.setVelocity(maxVelocity);
+        vertSlideRight.setVelocity(maxVelocity);
+
+        // Set power to ensure motor runs at requested velocity
+        vertSlideLeft.setPower(1.0);
+        vertSlideRight.setPower(1.0);
     }
 
     private void handleHorizontalSlides() {
@@ -719,6 +808,7 @@ public class RRTeleOp_Init extends LinearOpMode {
 //            horizSlideRight.setPosition(1 - currentHorizPosition); // Reverse for opposite side
 
             // Set servo powers (one needs to be reversed)
+            servoPower = Range.clip(servoPower,0,1);
             horizSlideLeft.setPosition(servoPower);
             horizSlideRight.setPosition(1.0 - servoPower); // Reverse direction for opposite side
 
@@ -728,14 +818,15 @@ public class RRTeleOp_Init extends LinearOpMode {
 //
 //            // Add detailed telemetry
 //            telemetry.addData("Stick X Input", String.format("%.2f", stickX));
-//            telemetry.addData("Current Position", String.format("%.2f", currentHorizPosition));
-//            telemetry.addData("Left Servo", String.format("%.2f", horizSlideLeft.getPosition()));
+//            telemetry.addData("Current Position", String.format("%.2f", currentorizPosition));
+//            telemetry.addData("Left Servo", String.format("%.2f", horizSlideLHeft.getPosition()));
 //            telemetry.addData("Right Servo", String.format("%.2f", horizSlideRight.getPosition()));
-        } else {
-            // Stop the servos
-            horizSlideLeft.setPosition(0.5);
-            horizSlideRight.setPosition(0.5);
         }
+//        else {
+//            // Stop the servos
+//            horizSlideLeft.setPosition(0.5);
+//            horizSlideRight.setPosition(0.5);
+//        }
     }
 
     private void handleVerticalClaw() {
@@ -947,10 +1038,10 @@ public class RRTeleOp_Init extends LinearOpMode {
 //        telemetry.addData("Gripper Position", vertClawGripper.getPosition());
 
         // Add these inside handleVerticalClawContinuous()
-        telemetry.addData("Left Servo Position", vertClawRotateLeft.getPosition());
-        telemetry.addData("Right Servo Position", vertClawRotateRight.getPosition());
-        telemetry.addData("Left Bumper Pressed", gamepad2.left_bumper);
-        telemetry.addData("Left Trigger Value", gamepad2.left_trigger);
+//        telemetry.addData("Left Servo Position", vertClawRotateLeft.getPosition());
+//        telemetry.addData("Right Servo Position", vertClawRotateRight.getPosition());
+//        telemetry.addData("Left Bumper Pressed", gamepad2.left_bumper);
+//        telemetry.addData("Left Trigger Value", gamepad2.left_trigger);
     }
 
 
@@ -1027,34 +1118,64 @@ public class RRTeleOp_Init extends LinearOpMode {
 
         // Gripper control (B button)
         if (gamepad2.y) {
-            horizClawGripper.setPosition(CLAW_CLOSED);
+            horizClawGripper.setPosition(HCLAW_CLOSED);
         } else if (gamepad2.a) {
-            horizClawGripper.setPosition(CLAW_OPEN);
+            horizClawGripper.setPosition(HCLAW_OPEN);
         }
     }
 
+//    private void moveVerticalSlidesToPosition(int targetPosition) {
+//        // Safety bounds check
+//        targetPosition = Range.clip(targetPosition, VERT_SLIDE_MIN, VERT_SLIDE_MAX);
+//
+//        int currentPositionLeft = vertSlideLeft.getCurrentPosition();
+//        int currentPositionRight = vertSlideRight.getCurrentPosition();
+//        int currentPosition = (vertSlideLeft.getCurrentPosition() + vertSlideRight.getCurrentPosition()) / 2;
+//        double error = targetPosition - currentPosition;
+//        double deltaTime = vertSlidePIDTimer.seconds();
+//
+//        // PID calculation
+//        vertIntegralSum += error * deltaTime;
+//        double derivative = (error - lastVertError) / deltaTime;
+//
+//        double power = (error * SLIDES_P) + (vertIntegralSum * SLIDES_I) + (derivative * SLIDES_D);
+//        power = Range.clip(power, -1.0, 1.0);
+//
+//        // Apply power to motors
+//        vertSlideLeft.setPower(power);
+////        vertSlideRight.setPower(power);
+//
+//        // Update PID variables
+//        lastVertError = error;
+//        vertSlidePIDTimer.reset();
+//    }
+
+    // Modify the moveVerticalSlidesToPosition method to use higher velocity
     private void moveVerticalSlidesToPosition(int targetPosition) {
-        // Safety bounds check
-        targetPosition = Range.clip(targetPosition, VERT_SLIDE_MIN, VERT_SLIDE_MAX);
+        // Calculate the difference between current and target positions
+        int currentPosition = vertSlideLeft.getCurrentPosition();
+        int positionError = targetPosition - currentPosition;
 
-        int currentPosition = (vertSlideLeft.getCurrentPosition() + vertSlideRight.getCurrentPosition()) / 2;
-        double error = targetPosition - currentPosition;
-        double deltaTime = vertSlidePIDTimer.seconds();
+        // Use proportional control with a higher gain
+        double kP = 0.015; // Increase this value for faster movement
+        double power = kP * positionError;
 
-        // PID calculation
-        vertIntegralSum += error * deltaTime;
-        double derivative = (error - lastVertError) / deltaTime;
+        // Ensure minimum power to overcome static friction
+        if (Math.abs(power) < 0.15 && Math.abs(positionError) > 10) {
+            power = Math.signum(power) * 0.15;
+        }
 
-        double power = (error * SLIDES_P) + (vertIntegralSum * SLIDES_I) + (derivative * SLIDES_D);
-        power = Range.clip(power, -1.0, 1.0);
+        // Apply maximum power limit but allow full speed
+        power = Range.clip(power, -MAX_SLIDE_POWER, MAX_SLIDE_POWER);
 
-        // Apply power to motors
         vertSlideLeft.setPower(power);
         vertSlideRight.setPower(power);
 
-        // Update PID variables
-        lastVertError = error;
-        vertSlidePIDTimer.reset();
+        // Add telemetry for debugging
+        telemetry.addData("Target Position", targetPosition);
+        telemetry.addData("Current Position", currentPosition);
+        telemetry.addData("Error", positionError);
+        telemetry.addData("Power", power);
     }
 
     private boolean isAtVerticalTarget() {
@@ -1073,6 +1194,8 @@ public class RRTeleOp_Init extends LinearOpMode {
     private double getVerticalSlidePower(double rawPower) {
         // Add position-based safety limits
         int currentPos = (vertSlideLeft.getCurrentPosition() + vertSlideRight.getCurrentPosition()) / 2;
+        telemetry.addData("CurrentPos: ", currentPos);
+        telemetry.addData("rawPower: ", rawPower);
 
         // Near bottom limit
         if (currentPos < VERT_SLIDE_LOW + VERT_SLIDE_SAFETY_MARGIN && rawPower < 0) {

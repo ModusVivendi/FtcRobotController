@@ -11,6 +11,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 //import com.qualcomm.robotcore.hardware.DcMotorEx.CurrentUnit;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
@@ -91,8 +92,8 @@ public class RRTeleOp extends LinearOpMode {
     private static final int VERT_SLIDE_MIN = 100;
     private static final int VERT_SLIDE_MAX = 3000;
     private static final int VERT_SLIDE_LOW = 100;
-    private static final int VERT_SLIDE_MID = 1500;
-    private static final int VERT_SLIDE_HIGH = 1800;
+    private static final int VERT_SLIDE_MID = 1000;
+    private static final int VERT_SLIDE_HIGH = 1500;
 
     // Horizontal slider positions
     private static final double HORIZ_SLIDE_MIN = 0.03;
@@ -108,7 +109,7 @@ public class RRTeleOp extends LinearOpMode {
     // Claw rotation positions
     private static final double VERT_CLAW_ARM_STOPPED = 0.5;
     private static final double VERT_CLAW_ROTATED = 0.8;
-    private static final double VERT_CLAW_LEFT_ROTATION = -0.5;
+    private static final double VERT_CLAW_LEFT_ROTATION = 0.2;
     private static final double VERT_CLAW_RIGHT_ROTATION = 0.8;
     private static final double VERT_CLAW_GRIP_OPEN = 0.0;
     private static final double VERT_CLAW_GRIP_CLOSE = 1.0;
@@ -126,8 +127,8 @@ public class RRTeleOp extends LinearOpMode {
     private VertRotationState vertRotationState = VertRotationState.INIT;
     // Vertical claw gripper positions
     private static final double VERT_CLAW_GRIP_INIT = 0.5;
-    private static final double CLAW_OPEN = -0.9;
-    private static final double CLAW_CLOSED = 0.9;
+    private static final double CLAW_OPEN = -1;
+    private static final double CLAW_CLOSED = 1;
 
     // Add these with your other class variables
     private boolean isHorizClawAtLeftLimit = false;
@@ -381,9 +382,9 @@ public class RRTeleOp extends LinearOpMode {
             //handleIntake();
             handleVerticalSlides();
             handleHorizontalSlides();
-//            handleVerticalClawContinuous();
+            handleVerticalClawContinuous();
 //            handleVerticalClaw();
-            handleVerticalClawRotation();
+//            handleVerticalClawRotation();
             handleVerticalClawGripper();
             handleHorizontalClaw();
 //            handleHorizontalClawContinuous();
@@ -494,7 +495,7 @@ public class RRTeleOp extends LinearOpMode {
             vertSlideRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
             // Set opposite directions for parallel-mounted motors
-            vertSlideLeft.setDirection(DcMotor.Direction.REVERSE);
+            vertSlideLeft.setDirection(DcMotor.Direction.FORWARD);
             vertSlideRight.setDirection(DcMotor.Direction.REVERSE);
         }
     }
@@ -891,12 +892,13 @@ public class RRTeleOp extends LinearOpMode {
                         horizSlideState = HorizSlideState.MOVING_IN;
                     }
                 }
-                // Hold position
-                horizSlideLeft.setPosition(SERVO_STOP);
-                horizSlideRight.setPosition(SERVO_STOP);
+//                // Hold position
+//                horizSlideLeft.setPosition(SERVO_STOP);
+//                horizSlideRight.setPosition(SERVO_STOP);
                 break;
 
             case MOVING_OUT:
+                telemetry.addLine("Moving out");
                 // Check if we should stop
                 if (Math.abs(stickX) <= HORIZ_DEADZONE ||
                         currentHorizPosition >= HORIZ_SLIDE_MAX) {
@@ -918,6 +920,7 @@ public class RRTeleOp extends LinearOpMode {
                 break;
 
             case MOVING_IN:
+                telemetry.addLine("Moving in");
                 // Check if we should stop
                 if (Math.abs(stickX) <= HORIZ_DEADZONE ||
                         currentHorizPosition <= HORIZ_SLIDE_MIN) {
@@ -1123,6 +1126,116 @@ public class RRTeleOp extends LinearOpMode {
         telemetry.addData("Gripper State", vertGripperState);
         telemetry.addData("Grip Position", String.format("%.2f", currentGripPosition));
     }
+
+
+
+
+
+    private void handleVerticalClawRotation2() {
+        // Constants for smoother control
+        final double SERVO_STOP = 0.5;
+        final double GRIP_SAFETY_MARGIN = 0.02;  // Margin before max/min positions
+        final double GRIP_SLOW_SPEED = 0.1;      // Slower speed near limits
+        final double GRIP_NORMAL_SPEED = 0.4;    // Normal movement speed
+        final double POSITION_THRESHOLD = 0.1;   // Distance from target to start slowing
+
+        double moveGripSpeed = 0.0;
+        double moveSpeedOutGrip =  GRIP_NORMAL_SPEED;
+
+        if (vertClawGripper == null || !gamepadCalc.isGamepadSystemHealthy()) {
+            telemetry.addData("Gripper Error", "Components not initialized");
+            return;
+        }
+
+        Gamepad gamepad2 = gamepadCalc.getGamepad2();
+        if (gamepad2 == null) return;
+
+        switch (vertGripperState) {
+            case INIT:
+                // First close the gripper
+                vertClawGripper.setPosition(VERT_CLAW_GRIP_CLOSE);
+                sleep(300);  // Wait for gripper to close
+
+                // Then move to init position to maintain tension
+                vertClawGripper.setPosition(VERT_CLAW_GRIP_INIT);
+                sleep(200);  // Short delay for stability
+
+                // Update tracking
+                currentGripPosition = VERT_CLAW_GRIP_INIT;
+                vertGripperState = VertGripperState.IDLE;
+                break;
+
+            case IDLE:
+                if (gamepad2.x) {
+                    vertGripperState = VertGripperState.CLOSING;
+                    currentGripPosition = VERT_CLAW_GRIP_CLOSE;
+                } else if (gamepad2.b) {
+                    vertGripperState = VertGripperState.OPENING;
+                    currentGripPosition = VERT_CLAW_GRIP_OPEN;
+                }
+                break;
+
+            case OPENING:
+                if (currentGripPosition <= VERT_CLAW_GRIP_OPEN + GRIP_SAFETY_MARGIN) {
+                    // We've reached the open position
+                    vertClawGripper.setPosition(VERT_CLAW_GRIP_OPEN);
+                    currentGripPosition = VERT_CLAW_GRIP_OPEN;
+                    vertGripperState = VertGripperState.IDLE;
+                } else {
+                    // Calculate distance to target
+                    double distanceToTarget = currentGripPosition - VERT_CLAW_GRIP_OPEN;
+                    if (distanceToTarget < POSITION_THRESHOLD) {
+                        // Linear interpolation between slow and normal speed
+                        double speedFactor = distanceToTarget / POSITION_THRESHOLD;
+                        moveGripSpeed = GRIP_SLOW_SPEED + (GRIP_NORMAL_SPEED - GRIP_SLOW_SPEED) * speedFactor;
+                    } else {
+                        moveGripSpeed = GRIP_NORMAL_SPEED;
+                    }
+
+                    double newGripPosition = currentGripPosition - moveGripSpeed;
+                    newGripPosition = Range.clip(newGripPosition, VERT_CLAW_GRIP_OPEN, VERT_CLAW_GRIP_CLOSE);
+
+                    vertClawGripper.setPosition(newGripPosition);
+                    currentGripPosition = newGripPosition;
+
+                    // Debug telemetry
+                    telemetry.addData("Distance to Target", distanceToTarget);
+                    telemetry.addData("Move Speed", moveGripSpeed);
+                    telemetry.addData("Current Position", currentGripPosition);
+
+//                    telemetry.addData("newgridPosition:", newGripPosition);
+//                    moveSpeedOutGrip = (newGripPosition > VERT_CLAW_GRIP_OPEN + GRIP_SAFETY_MARGIN) ?
+//                            GRIP_SLOW_SPEED : GRIP_NORMAL_SPEED;
+//                    currentGripPosition = Range.clip(newGripPosition,
+//                            VERT_CLAW_GRIP_OPEN,
+//                            VERT_CLAW_GRIP_CLOSE);
+////                    vertClawGripper.setPosition(newGripPosition);
+//                    vertClawGripper.setPosition(VERT_CLAW_GRIP_INIT - moveSpeedOutGrip);
+//                    currentGripPosition = moveSpeedOutGrip;
+                }
+                break;
+
+            case CLOSING:
+                if (currentGripPosition >= VERT_CLAW_GRIP_CLOSE) {
+                    vertClawGripper.setPosition(VERT_CLAW_GRIP_CLOSE);
+                    vertGripperState = VertGripperState.IDLE;
+                } else {
+                    double newGripPosition = currentGripPosition + VERT_GRIP_INCREMENT;
+                    newGripPosition = Range.clip(newGripPosition,
+                            VERT_CLAW_GRIP_OPEN,
+                            VERT_CLAW_GRIP_CLOSE);
+                    vertClawGripper.setPosition(newGripPosition);
+                    currentGripPosition = newGripPosition;
+                }
+                break;
+        }
+
+        telemetry.addData("Gripper State", vertGripperState);
+        telemetry.addData("Grip Position", String.format("%.2f", currentGripPosition));
+    }
+
+
+
 
 
 
@@ -1340,6 +1453,7 @@ public class RRTeleOp extends LinearOpMode {
 //                break;
 
             case TRANSFER:
+
                 vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
                 vertClawGripper.setPosition(CLAW_OPEN);
                 telemetry.addData("Vertical Claw", "Transfer Position");
@@ -1566,31 +1680,32 @@ public class RRTeleOp extends LinearOpMode {
             telemetry.addData("HCC value", horizClawRotateLeft.getPosition());
         }
 
-        // Gripper control (B button)
-        if (gamepad2.y) {
-            horizClawGripper.setPosition(CLAW_OPEN);
-            telemetry.addData("Claw Action", "Open");
-
-        } else if (gamepad2.a) {
-            horizClawGripper.setPosition(CLAW_CLOSED);
-            telemetry.addData("Claw Action", "Close");
-
-        }
-
-//        // Gripper control with continuous rotation servo
-//        long currentTime = System.currentTimeMillis();
+//        // Gripper control (B button)
+//        if (gamepad2.y) {
+//            horizClawGripper.setPosition(CLAW_OPEN);
+//            telemetry.addData("Claw Action", "Open");
 //
-//        if (gamepad2.y && !isClawClosed) {
-//            // Open claw
-//            horizClawGripper.setPosition(CLAW_OPEN_SPEED);
-//            lastGripChangeTime = currentTime;
-//            isClawClosed = false;
-//        } else if (gamepad2.a && !isClawClosed) {
-//            // Close claw
-//            horizClawGripper.setPosition(CLAW_CLOSE_SPEED);
-//            lastGripChangeTime = currentTime;
-//            isClawClosed = true;
+//        } else if (gamepad2.a) {
+//            horizClawGripper.setPosition(CLAW_CLOSED);
+//            telemetry.addData("Claw Action", "Close");
+//
 //        }
+
+        // Gripper control with continuous rotation servo
+        long currentTime = System.currentTimeMillis();
+
+        if (gamepad2.y && isClawClosed) {
+            // Open claw
+            telemetry.addLine("Rotate up");
+            horizClawGripper.setPosition(CLAW_OPEN_SPEED);
+            lastGripChangeTime = currentTime;
+            isClawClosed = false;
+        } else if (gamepad2.a && !isClawClosed) {
+            // Close claw
+            horizClawGripper.setPosition(CLAW_CLOSE_SPEED);
+            lastGripChangeTime = currentTime;
+            isClawClosed = true;
+        }
 
 //        // Stop the servo after duration
 //        if (currentTime - lastGripChangeTime > GRIP_DURATION_MS) {
@@ -1615,7 +1730,7 @@ public class RRTeleOp extends LinearOpMode {
         final double SERVO_STOP = 0.5;
         final double HOLDING_POWER = 0.05;
         final double ROTATE_SPEED_LEFT = 0.4;   // Speed for left rotation
-        final double ROTATE_SPEED_RIGHT = 0.4;  // Reduced speed for right rotation
+        final double ROTATE_SPEED_RIGHT = 0.46;  // Reduced speed for right rotation
 
         // Rotation control with limits
         if (gamepad2.right_bumper && !isHorizClawAtLeftLimit) {

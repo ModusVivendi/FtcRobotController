@@ -14,11 +14,15 @@ public class AutoPushSamples extends LinearOpMode {
     private ElapsedTime runtime = new ElapsedTime();
 
     // Field positions (adjust these based on actual field measurements)
-    private static final Pose2d STARTING_POSE = new Pose2d(-35, -60, Math.toRadians(90)); // Adjust based on starting position
-    private static final Vector2d SAMPLE1_POSITION = new Vector2d(-35, -24);  // First sample position
-    private static final Vector2d SAMPLE2_POSITION = new Vector2d(-35, -12);  // Second sample position
-    private static final Vector2d SAMPLE3_POSITION = new Vector2d(-35, 0);    // Third sample position
-    private static final Vector2d HUMAN_PLAYER_ZONE = new Vector2d(-58, -12); // Human player zone position
+    private static final Pose2d STARTING_POSE = new Pose2d(+10, -60, Math.toRadians(90)); // Adjust based on starting position
+    private static final Pose2d Transit1_POSITION = new Pose2d(30, -50, Math.toRadians(90));  // First sample position
+    // private static final Vector2d Transit1_POSITION = new Vector2d(30, -10);  // First sample position
+    private static final Pose2d Transit2_POSITION = new Pose2d(30, -10, Math.toRadians(90));  // First sample position
+
+    private static final Vector2d SAMPLE1_POSITION = new Vector2d(35, -10);  // First sample position
+    private static final Vector2d SAMPLE2_POSITION = new Vector2d(40, -24);  // Second sample position
+    private static final Vector2d SAMPLE3_POSITION = new Vector2d(40, -15);    // Third sample position
+    private static final Vector2d HUMAN_PLAYER_ZONE = new Vector2d(58, -12); // Human player zone position
 
     @Override
     public void runOpMode() {
@@ -29,7 +33,17 @@ public class AutoPushSamples extends LinearOpMode {
         drive.setPoseEstimate(STARTING_POSE);
 
         // Build trajectories
-        Trajectory moveToFirstSample = drive.trajectoryBuilder(STARTING_POSE)
+        Trajectory moveToTransit1 = drive.trajectoryBuilder(STARTING_POSE).lineToSplineHeading(Transit1_POSITION)
+//                .lineTo(Transit1_POSITION)
+                .build();
+
+        // Build trajectories
+        Trajectory moveToTransit2 = drive.trajectoryBuilder(Transit1_POSITION).lineToSplineHeading(Transit2_POSITION)
+                .build();
+
+
+        // Build trajectories
+        Trajectory moveToFirstSample = drive.trajectoryBuilder(moveToTransit2.end())
                 .lineTo(SAMPLE1_POSITION)
                 .build();
 
@@ -58,6 +72,11 @@ public class AutoPushSamples extends LinearOpMode {
         runtime.reset();
 
         if (isStopRequested()) return;
+
+        // Execute sample pushing sequence
+        telemetry.addData("Status", "Moving to first sample");
+        telemetry.update();
+        drive.followTrajectory(moveToTransit1);
 
         // Execute sample pushing sequence
         telemetry.addData("Status", "Moving to first sample");
