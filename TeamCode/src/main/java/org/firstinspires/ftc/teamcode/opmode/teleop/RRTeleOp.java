@@ -109,11 +109,12 @@ public class RRTeleOp extends LinearOpMode {
     // Claw rotation positions
     private static final double VERT_CLAW_ARM_STOPPED = 0.5;
     private static final double VERT_CLAW_ROTATED = 0.8;
-    private static final double VERT_CLAW_LEFT_ROTATION = 0.2;
-    private static final double VERT_CLAW_RIGHT_ROTATION = 0.8;
+    private static final double VERT_CLAW_LEFT_ROTATION = 0.3;
+    private static final double VERT_CLAW_RIGHT_ROTATION = 0.7;
     private static final double VERT_CLAW_GRIP_OPEN = 0.0;
     private static final double VERT_CLAW_GRIP_CLOSE = 1.0;
-    private static final double HORIZ_CLAW_PARALLEL = 5;
+    private static final double HORIZ_CLAW_PARALLEL = 0.7;
+    private static double currentVertPosition = 0.1;
     private boolean isClawClosed = false;
     private double currentGripPosition = VERT_CLAW_GRIP_CLOSE;
     final double VERT_GRIP_INCREMENT = 0.25;
@@ -382,9 +383,9 @@ public class RRTeleOp extends LinearOpMode {
             //handleIntake();
             handleVerticalSlides();
             handleHorizontalSlides();
-            handleVerticalClawContinuous();
+//            handleVerticalClawContinuous();
 //            handleVerticalClaw();
-//            handleVerticalClawRotation();
+            handleVerticalClawRotation();
             handleVerticalClawGripper();
             handleHorizontalClaw();
 //            handleHorizontalClawContinuous();
@@ -980,40 +981,53 @@ public class RRTeleOp extends LinearOpMode {
         Gamepad gamepad2 = gamepadCalc.getGamepad2();
         if (gamepad2 == null) return;
 
+        // Define angle limits (adjust these values according to your needs)
+        final double MIN_ANGLE = 0.0;   // Minimum servo position (0.0 to 1.0)
+        final double MAX_ANGLE = 1.25;   // Maximum servo position (0.0 to 1.0)
+
         switch (vertRotationState) {
             case INIT:
                 vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
                 vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+                currentVertPosition = 0.1; // Reset to middle position during init
                 vertRotationState = VertRotationState.IDLE;
                 break;
 
             case IDLE:
-                if (gamepad2.left_bumper) {
+                if (gamepad2.left_bumper && currentVertPosition > MIN_ANGLE) {
                     vertRotationState = VertRotationState.ROTATING_LEFT;
-                } else if (gamepad2.left_trigger > 0.5) {
+                } else if (gamepad2.left_trigger > 0.5 && currentVertPosition < MAX_ANGLE) {
                     vertRotationState = VertRotationState.ROTATING_RIGHT;
                 }
                 break;
 
             case ROTATING_LEFT:
-                if (!gamepad2.left_bumper) {
+                if (!gamepad2.left_bumper || currentVertPosition <= MIN_ANGLE) {
                     vertRotationState = VertRotationState.IDLE;
                     vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
                     vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
                 } else {
-                    vertClawRotateLeft.setPosition(VERT_CLAW_LEFT_ROTATION);
-                    vertClawRotateRight.setPosition(1 - VERT_CLAW_LEFT_ROTATION);
+                    // Update current position (adjust the increment as needed for your servo speed)
+                    currentVertPosition -= 0.01;
+                    // Make sure we don't go below the minimum
+                    currentVertPosition = Math.max(currentVertPosition, MIN_ANGLE);
+                    vertClawRotateLeft.setPosition(1-VERT_CLAW_LEFT_ROTATION);
+                    vertClawRotateRight.setPosition(VERT_CLAW_LEFT_ROTATION);
                 }
                 break;
 
             case ROTATING_RIGHT:
-                if (gamepad2.left_trigger <= 0.5) {
+                if (gamepad2.left_trigger <= 0.5  || currentVertPosition >= MAX_ANGLE) {
                     vertRotationState = VertRotationState.IDLE;
                     vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
                     vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
                 } else {
-                    vertClawRotateLeft.setPosition(VERT_CLAW_RIGHT_ROTATION);
-                    vertClawRotateRight.setPosition(1 - VERT_CLAW_RIGHT_ROTATION);
+                    // Update current position (adjust the increment as needed for your servo speed)
+                    currentVertPosition += 0.01;
+                    // Make sure we don't go above the maximum
+                    currentVertPosition = Math.min(currentVertPosition, MAX_ANGLE);
+                    vertClawRotateLeft.setPosition(1-VERT_CLAW_RIGHT_ROTATION);
+                    vertClawRotateRight.setPosition(VERT_CLAW_RIGHT_ROTATION);
                 }
                 break;
         }
@@ -1667,18 +1681,37 @@ public class RRTeleOp extends LinearOpMode {
     private void handleHorizontalClaw() {
         if (horizClawRotateLeft == null || horizClawRotateRight == null || horizClawGripper == null) return;
 
+        // Define rotation limits for horizontal claw
+        final double MIN_HORIZ_ANGLE = 0.4;  // Minimum position limit
+        final double MAX_HORIZ_ANGLE = 0.65;  // Maximum position limit
+
         // Rotation control (right bumper/trigger)
-        if (gamepad2.right_bumper) {
+        if (gamepad2.right_bumper && currentHorizPosition > MIN_HORIZ_ANGLE) {
+            // Move backward (decrease position)
+            currentHorizPosition -= 0.01;  // Adjust increment as needed
+            currentHorizPosition = Math.max(currentHorizPosition, MIN_HORIZ_ANGLE);
+
             horizClawRotateLeft.setPosition(1-HORIZ_CLAW_PARALLEL);
             horizClawRotateRight.setPosition(HORIZ_CLAW_PARALLEL);
             telemetry.addData("Rotate back Action", "Open");
             telemetry.addData("HC value:", horizClawRotateLeft.getPosition());
-        } else if (gamepad2.right_trigger > 0.2) {
+            telemetry.addData("HC Position:", currentHorizPosition);
+        } else if (gamepad2.right_trigger > 0.2 && currentHorizPosition < MAX_HORIZ_ANGLE) {
+            // Move forward (increase position)
+            currentHorizPosition += 0.01;  // Adjust increment as needed
+            currentHorizPosition = Math.min(currentHorizPosition, MAX_HORIZ_ANGLE);
+
             horizClawRotateLeft.setPosition(HORIZ_CLAW_PARALLEL);
             horizClawRotateRight.setPosition(1-HORIZ_CLAW_PARALLEL);
             telemetry.addData("rotate back Action", "Close");
             telemetry.addData("HCC value", horizClawRotateLeft.getPosition());
-        }
+            telemetry.addData("HC Position:", currentHorizPosition);
+        } //else {
+//            // No input or at limit - stop rotation
+//            horizClawRotateLeft.setPosition(0.5);  // Neutral position to stop continuous rotation
+//            horizClawRotateRight.setPosition(0.5); // Neutral position to stop continuous rotation
+//            telemetry.addData("Rotate Status", "Stopped");
+//        }
 
 //        // Gripper control (B button)
 //        if (gamepad2.y) {
