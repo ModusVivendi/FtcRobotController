@@ -38,7 +38,7 @@ public class RRTeleOp extends LinearOpMode {
     private RobotConfig config;
 
     // Control mode flag
-    private boolean usePIDControlVert = true;  // False for direct control, True for PID
+    private boolean usePIDControlVert = false;  // False for direct control, True for PID
 
     // PID Controller instances
     private PIDFController leftSlideController;
@@ -76,7 +76,7 @@ public class RRTeleOp extends LinearOpMode {
     private Servo vertClawRotateLeft, vertClawRotateRight, vertClawGripper;
 
     // Horizontal Claw Servos
-    private Servo horizClawRotateLeft, horizClawRotateRight, horizClawGripper;
+    private Servo horizClawRotateUpDown, horizClawRotateLeftRight, horizClawGripper;
 
     // Color Sensor
     private ColorSensorV3 horizClawColor;
@@ -107,13 +107,14 @@ public class RRTeleOp extends LinearOpMode {
     private static final double HORIZ_CLAW_ROTATED = 0.2;
 
     // Claw rotation positions
+    private boolean safetyVerticalClaw = false;
     private static final double VERT_CLAW_ARM_STOPPED = 0.5;
     private static final double VERT_CLAW_ROTATED = 0.8;
     private static final double VERT_CLAW_LEFT_ROTATION = 0.3;
     private static final double VERT_CLAW_RIGHT_ROTATION = 0.7;
     private static final double VERT_CLAW_GRIP_OPEN = 0.0;
     private static final double VERT_CLAW_GRIP_CLOSE = 1.0;
-    private static final double HORIZ_CLAW_PARALLEL = 0.7;
+    private static final double HORIZ_CLAW_DOWN = 1.0;
     private static double currentVertPosition = 0.1;
     private boolean isClawClosed = false;
     private double currentGripPosition = VERT_CLAW_GRIP_CLOSE;
@@ -147,7 +148,7 @@ public class RRTeleOp extends LinearOpMode {
     // State tracking
     // State declarations
     private VertSlideState vertSlideState = VertSlideState.IDLE;
-    private HorizSlideState horizSlideState = HorizSlideState.IDLE;
+    private HorizSlideState horizSlideState = HorizSlideState.INIT;
     private VertClawState vertClawState = VertClawState.INIT;
     private RotationPosition rotationPosition = RotationPosition.CENTER;
     private VertSlideState slideState = VertSlideState.IDLE;
@@ -178,6 +179,8 @@ public class RRTeleOp extends LinearOpMode {
 
     private double currentPowerSmoothing = PRECISION_POWER_SMOOTHING;
     private double currentSlideMaxPower = PRECISION_MAX_POWER;
+
+    private boolean slideHorizontalInitialized = false;
 
     private boolean isClawAtLeftLimit = false;
     private boolean isClawAtRightLimit = false;
@@ -427,8 +430,8 @@ public class RRTeleOp extends LinearOpMode {
         vertClawGripper = config.getServoIfEnabled("VCG", HardwareConfig.ClawConfig.ENABLE_VERT_GRIPPER);
 
         // Initialize horizontal claw servos
-        horizClawRotateLeft = config.getServoIfEnabled("HCRL", HardwareConfig.ClawConfig.ENABLE_HORIZ_ROTATE_LEFT);
-        horizClawRotateRight = config.getServoIfEnabled("HCRR", HardwareConfig.ClawConfig.ENABLE_HORIZ_ROTATE_RIGHT);
+        horizClawRotateUpDown = config.getServoIfEnabled("HCRL", HardwareConfig.ClawConfig.ENABLE_HORIZ_ROTATE_LEFT);
+        horizClawRotateLeftRight = config.getServoIfEnabled("HCRR", HardwareConfig.ClawConfig.ENABLE_HORIZ_ROTATE_RIGHT);
         horizClawGripper = config.getServoIfEnabled("HCG", HardwareConfig.ClawConfig.ENABLE_HORIZ_GRIPPER);
 
         // Color sensor
@@ -653,6 +656,7 @@ public class RRTeleOp extends LinearOpMode {
         // Set output bounds (motor power limits)
         leftSlideController.setOutputBounds(-currentSlideMaxPower, currentSlideMaxPower);
         rightSlideController.setOutputBounds(-currentSlideMaxPower, currentSlideMaxPower);
+        telemetry.addData("currentSlideMaxPower : ", currentSlideMaxPower);
     }
 
     private void handleVerticalSlides() {
@@ -694,7 +698,8 @@ public class RRTeleOp extends LinearOpMode {
                 } else if (gamepad2.dpad_up && vertSlideLeft.getCurrentPosition() < VERT_SLIDE_HIGH) {
                     targetVertPosition = VERT_SLIDE_HIGH;
                     vertSlideState = VertSlideState.MOVING_TO_POSITION;
-                } else if (gamepad2.dpad_right) {
+                } else if (gamepad2.dpad_right && vertSlideLeft.getCurrentPosition() < VERT_SLIDE_HIGH &&
+                        vertSlideLeft.getCurrentPosition() > VERT_SLIDE_LOW) {
                     targetVertPosition = VERT_SLIDE_MID;
                     vertSlideState = VertSlideState.MOVING_TO_POSITION;
                 } else if (gamepad2.dpad_down && vertSlideLeft.getCurrentPosition() > VERT_SLIDE_LOW) {
@@ -816,6 +821,7 @@ public class RRTeleOp extends LinearOpMode {
         // Simple proportional control
         double power = error * 0.005; // Simple P factor
         power = Range.clip(power, -currentSlideMaxPower, currentSlideMaxPower);
+        telemetry.addData("Power vertical: ", power);
 
         // Apply safety limits
         power = getVerticalSlidePower(power);
@@ -855,7 +861,7 @@ public class RRTeleOp extends LinearOpMode {
 
     private void applyPowerToSlides(double power) {
         // Progressive power scaling near limits
-        int currentPos = vertSlideLeft.getCurrentPosition();
+        int currentPos = (vertSlideLeft.getCurrentPosition() + vertSlideRight.getCurrentPosition())/2;
         if (currentPos < VERT_SLIDE_MIN + 200 || currentPos > VERT_SLIDE_MAX - 200) {
             power *= 0.7;  // Reduce power near limits
         }
@@ -877,13 +883,31 @@ public class RRTeleOp extends LinearOpMode {
         final double HORIZ_DEADZONE = 0.1;
         final double SERVO_STOP = 0.5;
         final double SAFETY_MARGIN = 0.02;  // Margin before max/min positions
-        final double SLOW_SPEED = 0.02;      // Slower speed near limits
+        final double SLOW_SPEED = 0.02;     // Slower speed near limits
         final double NORMAL_SPEED = 0.5;    // Normal movement speed
+        final double RETRACT_SPEED = 0.4;   // Speed for retracting during TRANSFER
 
         double stickX = gamepad2.right_stick_x;
 
         // State machine for horizontal slides
         switch (horizSlideState) {
+            case INIT:
+                // Initialize the sliders to a known starting position
+                horizSlideLeft.setPosition(SERVO_STOP);
+                horizSlideRight.setPosition(SERVO_STOP);
+
+                // Set the initial position value
+                currentHorizPosition = HORIZ_SLIDE_MIN;  // Or any other initial position you prefer
+
+                // Reset any flags or counters if needed
+                slideHorizontalInitialized = true;
+
+                // Transition to IDLE state after initialization
+                horizSlideState = HorizSlideState.IDLE;
+
+                telemetry.addLine("Horizontal Slides Initialized");
+                break;
+
             case IDLE:
                 // Check for manual input
                 if (Math.abs(stickX) > HORIZ_DEADZONE) {
@@ -892,10 +916,11 @@ public class RRTeleOp extends LinearOpMode {
                     } else {
                         horizSlideState = HorizSlideState.MOVING_IN;
                     }
+                } else if (gamepad2.dpad_left) {
+                    // Add TRANSFER state transition on dpad_left press
+                    horizSlideState = HorizSlideState.TRANSFER;
+                    telemetry.addLine("Entering Transfer Mode - Retracting Slides");
                 }
-//                // Hold position
-//                horizSlideLeft.setPosition(SERVO_STOP);
-//                horizSlideRight.setPosition(SERVO_STOP);
                 break;
 
             case MOVING_OUT:
@@ -918,6 +943,12 @@ public class RRTeleOp extends LinearOpMode {
                     horizSlideRight.setPosition(SERVO_STOP - moveSpeedOut);
                     currentHorizPosition = Range.clip(targetOut, HORIZ_SLIDE_MIN, HORIZ_SLIDE_MAX);
                 }
+
+                // Check for TRANSFER state override
+                if (gamepad2.dpad_left) {
+                    horizSlideState = HorizSlideState.TRANSFER;
+                    telemetry.addLine("Transfer Mode Activated");
+                }
                 break;
 
             case MOVING_IN:
@@ -939,6 +970,37 @@ public class RRTeleOp extends LinearOpMode {
                     horizSlideLeft.setPosition(SERVO_STOP - moveSpeedIn);
                     horizSlideRight.setPosition(SERVO_STOP + moveSpeedIn);
                     currentHorizPosition = Range.clip(targetIn, HORIZ_SLIDE_MIN, HORIZ_SLIDE_MAX);
+                }
+
+                // Check for TRANSFER state override
+                if (gamepad2.dpad_left) {
+                    horizSlideState = HorizSlideState.TRANSFER;
+                    telemetry.addLine("Transfer Mode Activated");
+                }
+                break;
+
+            case TRANSFER:
+                telemetry.addLine("TRANSFER: Retracting horizontal slides");
+
+                // Check if we've fully retracted
+                if (currentHorizPosition <= HORIZ_SLIDE_MIN + SAFETY_MARGIN) {
+                    // We've reached the minimum position (fully retracted)
+                    horizSlideLeft.setPosition(SERVO_STOP);
+                    horizSlideRight.setPosition(SERVO_STOP);
+                    currentHorizPosition = HORIZ_SLIDE_MIN;
+
+                    // Stay in TRANSFER state while button is held
+                    if (!gamepad2.dpad_left) {
+                        horizSlideState = HorizSlideState.IDLE;
+                    }
+                } else {
+                    // Not fully retracted yet, move slides in
+                    horizSlideLeft.setPosition(SERVO_STOP - RETRACT_SPEED);
+                    horizSlideRight.setPosition(SERVO_STOP + RETRACT_SPEED);
+
+                    // Update position tracking (faster retraction than normal)
+                    currentHorizPosition -= 0.03;  // Faster decrement for quicker retraction
+                    currentHorizPosition = Math.max(currentHorizPosition, HORIZ_SLIDE_MIN);
                 }
                 break;
 
@@ -983,51 +1045,112 @@ public class RRTeleOp extends LinearOpMode {
 
         // Define angle limits (adjust these values according to your needs)
         final double MIN_ANGLE = 0.0;   // Minimum servo position (0.0 to 1.0)
-        final double MAX_ANGLE = 1.25;   // Maximum servo position (0.0 to 1.0)
+        final double MAX_ANGLE = 1.0;   // Maximum servo position (0.0 to 1.0)
+        final double TRANSFER_POSITION = 0.5; // Transfer position (between 0.0 and 1.0)
 
         switch (vertRotationState) {
             case INIT:
                 vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
                 vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
-                currentVertPosition = 0.1; // Reset to middle position during init
+                if (safetyVerticalClaw) {
+                    // Reset to middle position during init
+                    currentVertPosition = 0.1;
+                }
                 vertRotationState = VertRotationState.IDLE;
                 break;
 
             case IDLE:
-                if (gamepad2.left_bumper && currentVertPosition > MIN_ANGLE) {
-                    vertRotationState = VertRotationState.ROTATING_LEFT;
-                } else if (gamepad2.left_trigger > 0.5 && currentVertPosition < MAX_ANGLE) {
-                    vertRotationState = VertRotationState.ROTATING_RIGHT;
+                if (safetyVerticalClaw) {
+                    if (gamepad2.left_bumper && currentVertPosition > MIN_ANGLE) {
+                        vertRotationState = VertRotationState.ROTATING_LEFT;
+                    } else if (gamepad2.left_trigger > 0.5 && currentVertPosition < MAX_ANGLE) {
+                        vertRotationState = VertRotationState.ROTATING_RIGHT;
+                    } else if (gamepad2.dpad_left) {
+                        // Added the transfer state trigger with dpad_left
+                        vertRotationState = VertRotationState.TRANSFER;
+                        telemetry.addData("Safety Vertical Rotation", "Entering Transfer Mode");
+                    }
+                } else {
+                    if (gamepad2.left_bumper) {
+                        vertRotationState = VertRotationState.ROTATING_LEFT;
+                    } else if (gamepad2.left_trigger > 0.5) {
+                        vertRotationState = VertRotationState.ROTATING_RIGHT;
+                    } else if (gamepad2.dpad_left) {
+                        // Added the transfer state trigger with dpad_left
+                        vertRotationState = VertRotationState.TRANSFER;
+                        telemetry.addData("Vertical Rotation", "Entering Transfer Mode");
+                    }
                 }
                 break;
 
             case ROTATING_LEFT:
-                if (!gamepad2.left_bumper || currentVertPosition <= MIN_ANGLE) {
-                    vertRotationState = VertRotationState.IDLE;
-                    vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
-                    vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+                if (safetyVerticalClaw) {
+                    if (!gamepad2.left_bumper || currentVertPosition <= MIN_ANGLE) {
+                        vertRotationState = VertRotationState.IDLE;
+                        vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
+                        vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+                    } else {
+                        // Update current position (adjust the increment as needed for your servo speed)
+                        currentVertPosition -= 0.01;
+                        // Make sure we don't go below the minimum
+                        currentVertPosition = Math.max(currentVertPosition, MIN_ANGLE);
+                        vertClawRotateLeft.setPosition(1-VERT_CLAW_LEFT_ROTATION);
+                        vertClawRotateRight.setPosition(VERT_CLAW_LEFT_ROTATION);
+                    }
                 } else {
-                    // Update current position (adjust the increment as needed for your servo speed)
-                    currentVertPosition -= 0.01;
-                    // Make sure we don't go below the minimum
-                    currentVertPosition = Math.max(currentVertPosition, MIN_ANGLE);
-                    vertClawRotateLeft.setPosition(1-VERT_CLAW_LEFT_ROTATION);
-                    vertClawRotateRight.setPosition(VERT_CLAW_LEFT_ROTATION);
+                    if (!gamepad2.left_bumper){
+                        vertRotationState = VertRotationState.IDLE;
+                        vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
+                        vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+                    } else {
+                        vertClawRotateLeft.setPosition(1-VERT_CLAW_LEFT_ROTATION);
+                        vertClawRotateRight.setPosition(VERT_CLAW_LEFT_ROTATION);
+                    }
                 }
                 break;
 
             case ROTATING_RIGHT:
-                if (gamepad2.left_trigger <= 0.5  || currentVertPosition >= MAX_ANGLE) {
-                    vertRotationState = VertRotationState.IDLE;
-                    vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
-                    vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+                if (safetyVerticalClaw) {
+                    if (gamepad2.left_trigger <= 0.5 || currentVertPosition >= MAX_ANGLE) {
+                        vertRotationState = VertRotationState.IDLE;
+                        vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
+                        vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+                    } else {
+                        // Update current position (adjust the increment as needed for your servo speed)
+                        currentVertPosition += 0.01;
+                        // Make sure we don't go above the maximum
+                        currentVertPosition = Math.min(currentVertPosition, MAX_ANGLE);
+                        vertClawRotateLeft.setPosition(1-VERT_CLAW_RIGHT_ROTATION);
+                        vertClawRotateRight.setPosition(VERT_CLAW_RIGHT_ROTATION);
+                    }
                 } else {
-                    // Update current position (adjust the increment as needed for your servo speed)
-                    currentVertPosition += 0.01;
-                    // Make sure we don't go above the maximum
-                    currentVertPosition = Math.min(currentVertPosition, MAX_ANGLE);
-                    vertClawRotateLeft.setPosition(1-VERT_CLAW_RIGHT_ROTATION);
-                    vertClawRotateRight.setPosition(VERT_CLAW_RIGHT_ROTATION);
+                    if (gamepad2.left_trigger <= 0.5){
+                        vertRotationState = VertRotationState.IDLE;
+                        vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
+                        vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+                    } else {
+                        vertClawRotateLeft.setPosition(1-VERT_CLAW_RIGHT_ROTATION);
+                        vertClawRotateRight.setPosition(VERT_CLAW_RIGHT_ROTATION);
+                    }
+                }
+                break;
+
+            case TRANSFER:
+                // Set servos to transfer position
+                vertClawRotateLeft.setPosition(VERT_CLAW_ARM_STOPPED);
+                vertClawRotateRight.setPosition(VERT_CLAW_ARM_STOPPED);
+
+                // Update the current position tracking
+                currentVertPosition = TRANSFER_POSITION;
+
+                // Add telemetry
+                telemetry.addData("Rotation", "Transfer Position");
+
+                // If user releases dpad_left, return to IDLE
+                if (!gamepad2.dpad_left) {
+                    vertRotationState = VertRotationState.IDLE;
+                } else {
+                    vertRotationState = VertRotationState.INIT;
                 }
                 break;
         }
@@ -1679,11 +1802,11 @@ public class RRTeleOp extends LinearOpMode {
     }
 
     private void handleHorizontalClaw() {
-        if (horizClawRotateLeft == null || horizClawRotateRight == null || horizClawGripper == null) return;
+        if (horizClawRotateUpDown == null || horizClawRotateLeftRight == null || horizClawGripper == null) return;
 
         // Define rotation limits for horizontal claw
-        final double MIN_HORIZ_ANGLE = 0.4;  // Minimum position limit
-        final double MAX_HORIZ_ANGLE = 0.65;  // Maximum position limit
+        final double MIN_HORIZ_ANGLE = 0.0;  // Minimum position limit
+        final double MAX_HORIZ_ANGLE = 1.0;  // Maximum position limit
 
         // Rotation control (right bumper/trigger)
         if (gamepad2.right_bumper && currentHorizPosition > MIN_HORIZ_ANGLE) {
@@ -1691,25 +1814,25 @@ public class RRTeleOp extends LinearOpMode {
             currentHorizPosition -= 0.01;  // Adjust increment as needed
             currentHorizPosition = Math.max(currentHorizPosition, MIN_HORIZ_ANGLE);
 
-            horizClawRotateLeft.setPosition(1-HORIZ_CLAW_PARALLEL);
-            horizClawRotateRight.setPosition(HORIZ_CLAW_PARALLEL);
-            telemetry.addData("Rotate back Action", "Open");
-            telemetry.addData("HC value:", horizClawRotateLeft.getPosition());
+            horizClawRotateUpDown.setPosition(1-HORIZ_CLAW_DOWN);
+            horizClawRotateLeftRight.setPosition(HORIZ_CLAW_DOWN);
+            telemetry.addData("Rotate back Action", "Up");
+            telemetry.addData("HC value:", horizClawRotateUpDown.getPosition());
             telemetry.addData("HC Position:", currentHorizPosition);
         } else if (gamepad2.right_trigger > 0.2 && currentHorizPosition < MAX_HORIZ_ANGLE) {
             // Move forward (increase position)
             currentHorizPosition += 0.01;  // Adjust increment as needed
             currentHorizPosition = Math.min(currentHorizPosition, MAX_HORIZ_ANGLE);
 
-            horizClawRotateLeft.setPosition(HORIZ_CLAW_PARALLEL);
-            horizClawRotateRight.setPosition(1-HORIZ_CLAW_PARALLEL);
-            telemetry.addData("rotate back Action", "Close");
-            telemetry.addData("HCC value", horizClawRotateLeft.getPosition());
+            horizClawRotateUpDown.setPosition(HORIZ_CLAW_DOWN);
+            horizClawRotateLeftRight.setPosition(1-HORIZ_CLAW_DOWN);
+            telemetry.addData("rotate back Action", "Down");
+            telemetry.addData("HCC value", horizClawRotateUpDown.getPosition());
             telemetry.addData("HC Position:", currentHorizPosition);
         } //else {
 //            // No input or at limit - stop rotation
-//            horizClawRotateLeft.setPosition(0.5);  // Neutral position to stop continuous rotation
-//            horizClawRotateRight.setPosition(0.5); // Neutral position to stop continuous rotation
+//            horizClawRotateUpDown.setPosition(0.5);  // Neutral position to stop continuous rotation
+//            horizClawRotateLeftRight.setPosition(0.5); // Neutral position to stop continuous rotation
 //            telemetry.addData("Rotate Status", "Stopped");
 //        }
 
@@ -1729,12 +1852,13 @@ public class RRTeleOp extends LinearOpMode {
 
         if (gamepad2.y && isClawClosed) {
             // Open claw
-            telemetry.addLine("Rotate up");
+            telemetry.addLine("Claw open");
             horizClawGripper.setPosition(CLAW_OPEN_SPEED);
             lastGripChangeTime = currentTime;
             isClawClosed = false;
         } else if (gamepad2.a && !isClawClosed) {
             // Close claw
+            telemetry.addLine("Claw closes");
             horizClawGripper.setPosition(CLAW_CLOSE_SPEED);
             lastGripChangeTime = currentTime;
             isClawClosed = true;
@@ -1747,7 +1871,7 @@ public class RRTeleOp extends LinearOpMode {
     }
 
     private void handleHorizontalClawContinuous() {
-        if (horizClawRotateLeft == null || horizClawRotateRight == null ||
+        if (horizClawRotateUpDown == null || horizClawRotateLeftRight == null ||
                 horizClawGripper == null || !gamepadCalc.isGamepadSystemHealthy()) {
             telemetry.addData("Horizontal Claw Error", "Required components not initialized");
             return;
@@ -1768,21 +1892,21 @@ public class RRTeleOp extends LinearOpMode {
         // Rotation control with limits
         if (gamepad2.right_bumper && !isHorizClawAtLeftLimit) {
             // Left rotation only if not at left limit
-            horizClawRotateLeft.setPosition(SERVO_STOP - ROTATE_SPEED_LEFT);
-            horizClawRotateRight.setPosition(SERVO_STOP - ROTATE_SPEED_LEFT);
+            horizClawRotateUpDown.setPosition(SERVO_STOP - ROTATE_SPEED_LEFT);
+            horizClawRotateLeftRight.setPosition(SERVO_STOP - ROTATE_SPEED_LEFT);
             isHorizClawAtRightLimit = false;  // Reset right limit when moving left
             telemetry.addData("Horiz Rotate", "Left");
         }
         else if (gamepad2.right_trigger > 0.1 && !isHorizClawAtRightLimit) {
             // Right rotation only if not at right limit
-            horizClawRotateLeft.setPosition(SERVO_STOP + ROTATE_SPEED_RIGHT);
-            horizClawRotateRight.setPosition(SERVO_STOP + ROTATE_SPEED_RIGHT);
+            horizClawRotateUpDown.setPosition(SERVO_STOP + ROTATE_SPEED_RIGHT);
+            horizClawRotateLeftRight.setPosition(SERVO_STOP + ROTATE_SPEED_RIGHT);
             isHorizClawAtLeftLimit = false;  // Reset left limit when moving right
             telemetry.addData("Horiz Rotate", "Right");
         }
         else {
-            horizClawRotateLeft.setPosition(SERVO_STOP);
-            horizClawRotateRight.setPosition(SERVO_STOP);
+            horizClawRotateUpDown.setPosition(SERVO_STOP);
+            horizClawRotateLeftRight.setPosition(SERVO_STOP);
             telemetry.addData("Horiz Rotate", "Stopped");
         }
 
@@ -1796,8 +1920,8 @@ public class RRTeleOp extends LinearOpMode {
         }
 
         // Add telemetry for debugging
-        telemetry.addData("Left Servo Position", horizClawRotateLeft.getPosition());
-        telemetry.addData("Right Servo Position", horizClawRotateRight.getPosition());
+        telemetry.addData("Horiz claw Position", horizClawRotateUpDown.getPosition());
+        telemetry.addData("Right Servo Position", horizClawRotateLeftRight.getPosition());
         telemetry.addData("Right Bumper Pressed", gamepad2.right_bumper);
         telemetry.addData("Right Trigger Value", gamepad2.right_trigger);
     }
@@ -2229,9 +2353,9 @@ public class RRTeleOp extends LinearOpMode {
 
 //        // Horizontal Claw
 //        telemetry.addLine("=== Horizontal Claw ===");
-//        if (horizClawRotateLeft != null && horizClawRotateRight != null && horizClawGripper != null) {
-//            telemetry.addData("Rotate Left", horizClawRotateLeft.getPosition());
-//            telemetry.addData("Rotate Right", horizClawRotateRight.getPosition());
+//        if (horizClawRotateUpDown != null && horizClawRotateLeftRight != null && horizClawGripper != null) {
+//            telemetry.addData("Rotate Left", horizClawRotateUpDown.getPosition());
+//            telemetry.addData("Rotate Right", horizClawRotateLeftRight.getPosition());
 //            telemetry.addData("Gripper", horizClawGripper.getPosition());
 //        }
 

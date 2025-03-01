@@ -8,8 +8,8 @@ import com.acmerobotics.roadrunner.geometry.Vector2d;
 import com.acmerobotics.roadrunner.trajectory.Trajectory;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.SampleMecanumDrive;
 
-@Autonomous(name="PushSamples_IntoDeep", group="IntoDeep")
-public class AutoPushSamples extends LinearOpMode {
+@Autonomous(name="PushSamplesBySide_IntoDeep", group="IntoDeep")
+public class AutoPushSideSamples extends LinearOpMode {
     private SampleMecanumDrive drive;
     private ElapsedTime runtime = new ElapsedTime();
     private static final double xOffset =0.8;
@@ -40,7 +40,7 @@ public class AutoPushSamples extends LinearOpMode {
                 .build();
 
         // Build trajectories
-        Trajectory moveToSample1 = drive.trajectoryBuilder(moveToTransit1.end()).splineToConstantHeading(SAMPLE1_POSITION, Math.toRadians(90))
+        Trajectory moveToSample1 = drive.trajectoryBuilder(moveToTransit1.end()).splineToConstantHeading(SAMPLE1_POSITION, Math.toRadians(0))
                 .build();
 
 
@@ -61,7 +61,7 @@ public class AutoPushSamples extends LinearOpMode {
                 .splineToConstantHeading(SAMPLE3_POSITION, Math.toRadians(90))
                 .build();
 
-            Trajectory pushToParking3 = drive.trajectoryBuilder(moveToSample3.end())
+        Trajectory pushToParking3 = drive.trajectoryBuilder(moveToSample3.end())
                 .lineTo(PARKING3)
                 .build();
 

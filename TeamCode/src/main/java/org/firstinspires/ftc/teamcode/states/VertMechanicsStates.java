@@ -36,6 +36,7 @@ public class VertMechanicsStates {
         IDLE,
         ROTATING_LEFT,
         ROTATING_RIGHT,
+        TRANSFER,
         ERROR
     }
 }
